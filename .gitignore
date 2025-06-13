@@ -1,0 +1,30 @@
+# Binaries
+*.exe
+*.out
+*.o
+*.obj
+*.so
+*.a
+
+# Build folders
+build/
+bin/
+dist/
+
+# Editor/IDE files
+*.log
+*.swp
+*.swo
+*.DS_Store
+*.vscode/
+*.idea/
+
+# Backup files
+*~
+*.bak
+
+# CMake and Make build leftovers
+CMakeFiles/
+CMakeCache.txt
+Makefile
+cmake_install.cmake
