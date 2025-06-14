@@ -26,5 +26,4 @@ dist/
 # CMake and Make build leftovers
 CMakeFiles/
 CMakeCache.txt
-Makefile
 cmake_install.cmake
