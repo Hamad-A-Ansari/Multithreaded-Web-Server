@@ -18,20 +18,18 @@
 
 #define MAX_CLIENTS 10
 #define MAX_BYTES 4096
-typedef struct cache_elem cache_elem;
+typedef struct cache_element cache_element;
 
 struct cache_element {
   char* data;
   int len;
   char* url;
   time_t lru_time_track;
-  cache_elem* next; 
+  cache_element* next; 
 };
 
-cache_elem* find(char* url);
-
+cache_element* find(char* url);
 int add_cache_element(char *data, int size, char* url);
-
 void remove_cache_element();
 
 int port_number = 4021;
@@ -41,7 +39,7 @@ pthread_t tid[MAX_CLIENTS];
 sem_t semaphore;
 pthread_mutex_t lock;
 
-cache_elem* head;
+cache_element* head;
 int cache_size;
 
 int sendErrorMessage(int socket, int status_code)
@@ -364,4 +362,29 @@ int main(int argc, char* argv[]){
   close(proxy_socketId);
   return 0;
 
+}
+
+
+cache_element *find(char* url){
+  cache_element * site = NULL;
+  int temp_lock_val = pthread_mutex_lock(&lock);
+  printf("Remove cache Lock acquired %d\n", temp_lock_val);
+  if(head != NULL){
+    site = head;
+    while(site!=NULL){
+      if(strcmp(site->url, url)){
+        printf("LRU time track before: %ld", site->lru_time_track);
+        printf("\n url found\n");
+        site->lru_time_track = time(NULL);
+        printf("LRU time track after %ld", site->lru_time_track);
+        break;
+      }
+      site = site->next;
+    }
+  } else{
+    printf("url not found\n");
+  }
+  temp_lock_val = pthread_mutex_unlock(&lock);
+  printf("Lock is unlocked\n");
+  return site;
 }
