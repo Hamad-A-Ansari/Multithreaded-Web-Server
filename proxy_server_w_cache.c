@@ -44,6 +44,104 @@ pthread_mutex_t lock;
 cache_elem* head;
 int cache_size;
 
+int connectRemoteServer(char* host_addr, int port_num){
+
+  int remoteSocket = socket(AF_INET, SOCK_STREAM, 0);
+  if(remoteSocket < 0){
+    printf("Error creating your socket\n");
+    return -1;
+  }
+
+  struct hostent* host = gethostbyname(host_addr);
+  if(host == NULL){
+    fprintf(stderr, "No such host exists \n");
+    return -1;
+  }
+
+  struct sockaddr_in server_addr;
+  bzero((char *)&server_addr, sizeof(server_addr));
+  server_addr.sin_family = AF_INET;
+  server_addr.sin_port = htons(port_num);
+
+  bcopy((char *)host->h_addr, (char *)&server_addr.sin_addr.s_addr, host->h_length);
+  if(connect(remoteSocket, (struct sockaddr *)&server_addr, (size_t)sizeof(server_addr) < 0)){
+    fprintf(stderr, "Error in connecting \n");
+    return -1;
+  }
+
+  return remoteSocket;
+}
+
+
+int handle_request(int clientSocketId, struct ParsedRequest *request, char* tempReq){
+  char *buf = (char*)malloc(sizeof(char)*MAX_BYTES);
+  strcpy(buf, "GET");
+  strcat(buf, request->path);
+  strcat(buf, " ");
+  strcat(buf, request->version);
+  strcat(buf, "\r\n");
+  
+  size_t len = strlen(buf);
+
+  if(ParsedHeader_set(request, "Connection", "close") < 0){
+    printf("Set header key is not working");
+  }
+
+
+  if(ParsedHeader_get(request, "Host") == NULL){
+    if(ParsedHeader_set(request, "Host", request->host) < 0){
+      printf("Set Host header key is not working");
+    }
+  }
+
+  if(ParsedRequest_unparse_headers(request, buf+len, (size_t)MAX_BYTES-len) < 0){
+    printf("Unparse failed");
+  }
+
+  int server_port = 80;
+  if(request->port !=NULL){
+    server_port = atoi(request->port);
+  }
+
+  int remoteSocketId = connectRemoteServer(request->host, server_port);
+  if(remoteSocketId < 0){
+    return -1;
+  }
+
+  int bytes_send = send(remoteSocketId, buf, strlen(buf), 0);
+  bzero(buf, MAX_BYTES);
+
+  bytes_send = recv(remoteSocketId, buf, MAX_BYTES-1, 0);
+  char * temp_buffer = (char *)malloc(sizeof(char)*MAX_BYTES);
+  int temp_buffer_size = MAX_BYTES;
+  int temp_buffer_index = 0;
+
+  while(bytes_send > 0){
+    bytes_send = send(clientSocketId, buf, bytes_send, 0);
+    for(int i = 0; i < bytes_send/sizeof(char); i++){
+      temp_buffer[temp_buffer_index] = buf[i];    
+      temp_buffer_index++;
+    }
+    temp_buffer_size+=MAX_BYTES;
+    temp_buffer = (char *) realloc(temp_buffer, temp_buffer_size);
+
+    if(bytes_send < 0){
+      perror("Error in sending data to the client\n");
+      break;
+    }
+    bzero(buf, MAX_BYTES);
+    bytes_send = recv(remoteSocketId, buf, MAX_BYTES-1, 0);
+
+
+  }
+  temp_buffer[temp_buffer_index] = '\0';
+  free(buf);
+  add_cache_element(temp_buffer, strlen(temp_buffer), tempReq);
+  free(temp_buffer);
+  close(remoteSocketId);
+  return 0;
+}
+
 void *thread_fn(void *socketNew){
   sem_wait(&semaphore);
   int p;
@@ -91,7 +189,7 @@ void *thread_fn(void *socketNew){
     printf("%d\n\n", response);
   } else if(bytes_send_client > 0){
     len = strlen(buffer);
-    ParsedRequest *request = ParsedRequest_create();
+    struct ParsedRequest *request = ParsedRequest_create();
 
     if(ParsedRequest_parse(request, buffer, len) < 0){
       printf("Parsing failed \n");
